@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Validator;
 class LocationController extends Controller
 {
     /**
-     * تحديث الموقع الجغرافي للسائق (تستدعى كل 5 ثواني من تطبيق الموبايل)
+     * mettre à jour la localisation du conducteur 5 secondes par seconde
      */
     public function updateLocation(Request $request): JsonResponse
     {
@@ -30,21 +30,21 @@ class LocationController extends Controller
         $validator = Validator::make($request->all(), [
             'lat' => 'required|numeric',
             'lng' => 'required|numeric',
-            'heading' => 'nullable|integer', // اتجاه السيارة (0-360 درجة) لرسمها بشكل صحيح في الخريطة
-            'speed' => 'nullable|integer',   // السرعة الحالية
+            'heading' => 'nullable|integer', //direction
+            'speed' => 'nullable|integer',   //speed
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // 1. تحديث الموقع الحالي في جدول السائقين لسرعة البحث العادية
+        // 1. mettre à jour la localisation du conducteur
         $driver->update([
             'lat' => $request->lat,
             'lng' => $request->lng
         ]);
 
-        // 2. تسجيل النقطة في جدول التاريخ (Locations Tracking) من أجل الـ Real-time والـ History
+        // 2. créer une nouvelle location
         $location = Location::create([
             'driver_id' => $driver->id,
             'lat' => $request->lat,
@@ -52,9 +52,8 @@ class LocationController extends Controller
             'heading' => $request->heading ?? 0,
             'speed' => $request->speed ?? 0,
         ]);
-
-        // ملاحظة: هنا يتم إطلاق Broadcast Event عبر WebSockets (Pusher/Reverb) 
-        // لتحديث مكان السيارة على خريطة الراكب مباشرة بدون عمل Refresh.
+        //        $location = Location::create($request->all());
+        // 3. broadcaster la nouvelle location
         broadcast(new \App\Events\DriverLocationUpdated($location, $driver->id))->toOthers();
 
         return response()->json([

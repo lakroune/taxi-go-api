@@ -7,7 +7,7 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow; // البث الفوري بدون طابور الانتظار
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -27,21 +27,19 @@ class DriverLocationUpdated implements ShouldBroadcastNow
         $this->driver_id = $driver_id;
     }
 
+
     /**
-     * اسم القناة التي سيتم بث البيانات عبرها
+     *  Get the channels the event should broadcast on.
      */
-    /**
-     * اسم القناة المحمية التي سيتم بث البيانات عبرها
-     */
+
     public function broadcastOn(): array
     {
-        // رجعنا القناة PrivateChannel لحماية مسار تتبع السائق
         return [
             new PrivateChannel('tracking.' . $this->driver_id),
         ];
     }
     /**
-     * اسم الحدث المخصص الذي سيستمع له فرونت-إند الموبايل
+     * Get the event's broadcast name.
      */
     public function broadcastAs(): string
     {
@@ -49,7 +47,7 @@ class DriverLocationUpdated implements ShouldBroadcastNow
     }
 
     /**
-     * البيانات المحددة التي نريد إرسالها عبر الـ WebSocket
+     * Get the data to broadcast.
      */
     public function broadcastWith(): array
     {

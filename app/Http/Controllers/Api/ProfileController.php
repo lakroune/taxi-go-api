@@ -13,39 +13,38 @@ use Illuminate\Support\Facades\Storage;
 class ProfileController extends Controller
 {
     /**
-     * 1. رفع وتحديث الصورة الشخصية (Upload Avatar)
+     * 1. (Upload Avatar)
      */
     public function uploadAvatar(Request $request): JsonResponse
     {
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
-            'avatar' => 'required|image|mimes:jpeg,png,jpg|max:2048', // الحد الأقصى 2 ميجا
+            'avatar' => 'required|image|mimes:jpeg,png,jpg|max:2048', // 
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // حذف الصورة القديمة من السيرفر إذا كانت موجودة لتوفير المساحة
+        // supprimer prev avatar
         if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
             Storage::disk('public')->delete($user->avatar);
         }
 
-        // حفظ الصورة الجديدة في مجلد public/avatars
+        //store public/avatars
         $path = $request->file('avatar')->store('avatars', 'public');
 
-        // تحديث مسار الصورة في قاعدة البيانات
         $user->update(['avatar' => $path]);
 
         return response()->json([
             'message' => 'Profile picture updated successfully.',
-            'avatar_url' => asset('storage/' . $path) // رابط مباشر وصحيح للموبايل
+            'avatar_url' => asset('storage/' . $path) //
         ]);
     }
 
     /**
-     * 2. رفع وثائق السائق (Upload Driver Documents)
+     * 2. (Upload Documents)
      */
     public function uploadDocuments(Request $request): JsonResponse
     {
@@ -57,22 +56,19 @@ class ProfileController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'license_file' => 'required|file|mimes:pdf,jpeg,png,jpg|max:5120',   // رخصة السياقة (حتى 5 ميجا)
-            'insurance_file' => 'required|file|mimes:pdf,jpeg,png,jpg|max:5120', // وثيقة التأمين
+            'license_file' => 'required|file|mimes:pdf,jpeg,png,jpg|max:5120',   
+            'insurance_file' => 'required|file|mimes:pdf,jpeg,png,jpg|max:5120', // 
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // حفظ الملفات في مجلدات خاصة ومأمنة داخل الـ Storage
         $licensePath = $request->file('license_file')->store('documents/licenses', 'public');
         $insurancePath = $request->file('insurance_file')->store('documents/insurances', 'public');
 
-        // تحديث حقل الـ license في جدول السائقين ليحتفظ بالمسار الجديد
         $driver->update([
             'license' => $licensePath,
-            // إذا قمت بإضافة حقل للتأمين مستقبلاً في الـ migration يمكنك حفظه هنا أيضاً
         ]);
 
         return response()->json([

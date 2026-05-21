@@ -122,7 +122,7 @@ class DriverController extends Controller
     {
         $user = $request->user();
 
-        // 1. التأكد أن المستخدم لم يقم بطلب مسبقاً
+        // 1. Vérifier si l'utilisateur a deja soumis une demande de chauffeur
         $existingDriver = Driver::where('user_id', $user->id)->first();
         if ($existingDriver) {
             return response()->json([
@@ -130,29 +130,29 @@ class DriverController extends Controller
             ], 400);
         }
 
-        // 2. التحقق من صحة الوثائق والبيانات
+        // 2. Vérifier les données du formulaire
         $validator = Validator::make($request->all(), [
-            'vehicle_type' => 'required|in:taxi,moto', // طاكسي صغير أو دراجة نارية
-            'plate_number' => 'required|string|unique:drivers,plate_number', // رقم اللوحة
-            'license' => 'required|string', // رقم رخصة السياقة
-            'insurance_expiry' => 'required|date|after:today', // تاريخ انتهاء التأمين (خاص يكون مزال خدام)
+            'vehicle_type' => 'required|in:taxi,moto', // type de voiture
+            'plate_number' => 'required|string|unique:drivers,plate_number', // numero de plaque
+            'license' => 'required|string', // permis
+            'insurance_expiry' => 'required|date|after:today', // date d'expiration de l'assurance
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // 3. إنشاء ملف السائق بحالة 'offline' مؤقتاً في انتظار تفعيل الـ Admin
+        // 3. Créer le profil de chauffeur
         $driver = Driver::create([
             'user_id' => $user->id,
             'vehicle_type' => $request->vehicle_type,
             'plate_number' => $request->plate_number,
             'license' => $request->license,
             'insurance_expiry' => $request->insurance_expiry,
-            'status' => 'offline', // كيبدا offline تال التفعيل
+            'status' => 'offline', // par défaut, le chauffeur est hors ligne
         ]);
 
-        // (اختياري) هنا فالمستقبل غنزيدو الكود ديال رفع صور الوثائق (Carte Grise, Assurance)
+        // 4. Envoyer une notification aux admins (Carte Grise, Assurance)
 
         return response()->json([
             'message' => 'Your driver application has been submitted successfully. Waiting for admin approval.',
@@ -160,24 +160,24 @@ class DriverController extends Controller
         ], 21);
     }
 
-    /**
-     * 2. تفعيل السائق من طرف الأدمن (Admin Approval)
-     * هادي كيمشي ليها الأدمن ف لوحة التحكم باش يرجع الـ Role ديالو 'driver'
+    /** 
+     * 4. Approuver le chauffeur (Approve Driver)
+     * Note : Pour Asfi, on approuve le chauffeur directement et on met son statut à "offline"
      */
     public function approveDriver($id): JsonResponse
     {
-        // ملاحظة: هاد الـ Endpoint خاص يكون محمي بـ Middleware ديال Admin مستقبلاً
+        // Trouver le profil de chauffeur
         $driver = Driver::find($id);
 
         if (!$driver) {
             return response()->json(['message' => 'Driver application not found.'], 404);
         }
 
-        // تحديث دور المستخدم في جدول Users ليصبح driver رسميًا
+        // Mettre à jour le rôle de l'utilisateur
         $user = User::find($driver->user_id);
         $user->update(['role' => 'driver']);
 
-        // تحديث حالة السائق ليصبح جاهزاً للاستخدام
+        // Mettre à jour le statut du chauffeur
         $driver->update(['status' => 'offline']); 
 
         return response()->json([

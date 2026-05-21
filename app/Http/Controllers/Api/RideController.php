@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -11,12 +12,9 @@ use Illuminate\Support\Facades\Validator;
 class RideController extends Controller
 {
     /**
-     * 1. إنشاء طلب رحلة جديد (Create Ride Request)
-     * هذا الـ Endpoint يستدعيه الراكب من تطبيق الموبايل
      */
     public function store(Request $request): JsonResponse
     {
-        // التحقق من البيانات المرسلة من الموبايل
         $validator = Validator::make($request->all(), [
             'origin_lat' => 'required|numeric',
             'origin_lng' => 'required|numeric',
@@ -29,39 +27,34 @@ class RideController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // 2. حساب المسافة والتكلفة التقديرية (بناءً على معايير دفتر التحملات)
-        // هنا نستخدم خوارزمية مبسطة لحساب المسافة بين نقطتين (Haversine formula)
         $distance = $this->calculateDistance(
-            $request->origin_lat, $request->origin_lng,
-            $request->dest_lat, $request->dest_lng
+            $request->origin_lat,
+            $request->origin_lng,
+            $request->dest_lat,
+            $request->dest_lng
         );
 
-        // حساب السعر (مثلاً: 5 دراهم كبداية + 3 دراهم لكل كيلومتر) [cite: 58]
         $base_fare = 5.00;
         $price_per_km = 3.00;
         $estimated_fare = $base_fare + ($distance * $price_per_km);
 
-        // تطبيق خصم "الكورس مشركة" إذا تم تفعيل الخيار (مثال: خصم 30%) [cite: 40, 42]
         if ($request->is_shared) {
             $estimated_fare = $estimated_fare * 0.70;
         }
 
-        // 3. حفظ الطلب في قاعدة البيانات بحالة "معلق" (pending) [cite: 96]
         $ride = Ride::create([
-            'passenger_id' => $request->user()->id, // جلب الـ ID تلقائياً من الـ Token
+            'passenger_id' => $request->user()->id,
             'origin_lat' => $request->origin_lat,
             'origin_lng' => $request->origin_lng,
             'dest_lat' => $request->dest_lat,
             'dest_lng' => $request->dest_lng,
-            'status' => 'pending', // بانتظار قبول السائق [cite: 96]
+            'status' => 'pending', // 
             'fare' => round($estimated_fare, 2),
             'distance' => round($distance, 2),
-            'duration' => round($distance * 2), // افتراض دقيقتين لكل كيلومتر في السير العادي
+            'duration' => round($distance * 2),
             'is_shared' => $request->is_shared ?? false,
         ]);
 
-        // ملاحظة: هنا في المشروع الحقيقي يتم إطلاق Event (WebSockets/FCM) 
-        // لتنبيه السائقين القريبين فوراً في الخلفية[cite: 58, 69, 70].
 
         return response()->json([
             'message' => 'Ride request created successfully. Searching for drivers...',
@@ -70,19 +63,16 @@ class RideController extends Controller
     }
 
     /**
-     * 2. جلب تاريخ الرحلات الخاص بالصاحب الحساب الحالي (Ride History)
      */
     public function history(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        // إذا كان المستخدم راكباً يجلب رحلاته، وإذا كان سائقاً يجلب الرحلات التي نفذها [cite: 64, 96]
         if ($user->role === 'passenger') {
             $rides = Ride::where('passenger_id', $user->id)->orderBy('created_at', 'desc')->get();
         } else {
-            // جلب الـ driver_id أولاً من جدول السائقين
             $driver = Driver::where('user_id', $user->id)->first();
-            $rides = $driver 
+            $rides = $driver
                 ? Ride::where('driver_id', $driver->id)->orderBy('created_at', 'desc')->get()
                 : collect();
         }
@@ -93,26 +83,24 @@ class RideController extends Controller
     }
 
     /**
-     * خوارزمية حساب المسافة التقريبية بين نقطتين جغرافيتين (بالكيلومتر)
      */
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
     {
-        $earthRadius = 6371; // نصف قطر الأرض بالكيلومتر
-
+        $earthRadius = 6371; // Earth's radius in kilometers
         $dLat = deg2rad($lat2 - $lat1);
         $dLon = deg2rad($lon2 - $lon1);
 
-        $a = sin($dLat/2) * sin($dLat/2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon/2) * sin($dLon/2);
-        
-        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
-        
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($dLon / 2) * sin($dLon / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
         return $earthRadius * $c;
     }
 
     /**
-     * 3. إنهاء الرحلة واستخلاص المبلغ كاش (Complete Ride & Cash Payment)
+     * 3. (Complete Ride & Cash Payment)
      */
     public function completeRide(Request $request, $id): JsonResponse
     {
@@ -133,10 +121,8 @@ class RideController extends Controller
             return response()->json(['message' => 'Ride cannot be completed from current status: ' . $ride->status], 400);
         }
 
-        // 1. تحديث حالة الرحلة إلى "مكتملة"
         $ride->update(['status' => 'completed']);
 
-        // 2. تسجيل عملية الدفع النقدي (Cash) تلقائياً كما هو معتمد في المغرب
         \App\Models\Payment::create([
             'ride_id' => $ride->id,
             'method' => 'cash',
@@ -145,24 +131,24 @@ class RideController extends Controller
             'paid_at' => now(),
         ]);
 
-        // 3. إعادة تعيين حالة السائق ليصبح "متوفر" (available) لاستقبال رحلات أخرى
         $driver->update(['status' => 'available']);
 
         return response()->json([
             'message' => 'Ride completed successfully. Cash payment recorded.',
-            'fare_to_collect' => $ride->fare . ' DH', // المبلغ المطلوب من الراكب
+            'fare_to_collect' => $ride->fare . ' DH', // 
             'ride' => $ride
         ]);
     }
     /**
-     * جلب السائقين المتوفرين والقريبين من الراكب بناءً على موقعه الحالي (PostgreSQL Compatible)
+     *      getNearbyDrivers  
+     * 
      */
     public function getNearbyDrivers(Request $request): JsonResponse
     {
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'lat' => 'required|numeric',
             'lng' => 'required|numeric',
-            'radius' => 'nullable|numeric|max:50', // نصف القطر بالكيلومتر
+            'radius' => 'nullable|numeric|max:50', // 
         ]);
 
         if ($validator->fails()) {
@@ -171,11 +157,10 @@ class RideController extends Controller
 
         $userLat = $request->lat;
         $userLng = $request->lng;
-        $radius = $request->radius ?? 5; // الافتراضي 5 كم
+        $radius = $request->radius ?? 5; 
 
         /*
-         * صياغة المعادلة لتتوافق مع PostgreSQL 
-         * قمنا بتعويض HAVING بـ whereRaw لتفادي خطأ "Undefined column"
+         *  
          */
         $haversineFormula = '(6371 * acos(cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?)) + sin(radians(?)) * sin(radians(lat))))';
 
@@ -194,7 +179,6 @@ class RideController extends Controller
         ]);
     }
     /**
-     * 4. إلغاء الرحلة من طرف الراكب أو السائق (Cancel Ride)
      */
     public function cancelRide(Request $request, $id): JsonResponse
     {
@@ -205,7 +189,6 @@ class RideController extends Controller
             return response()->json(['message' => 'Ride not found.'], 404);
         }
 
-        // التأكد من أن المستخدم الحالي هو طرف في هذه الرحلة (الراكب أو السائق المعني)
         $isPassenger = ($user->id === $ride->passenger_id);
         $isDriver = false;
 
@@ -220,20 +203,16 @@ class RideController extends Controller
             return response()->json(['message' => 'Unauthorized. You are not part of this ride.'], 403);
         }
 
-        // التحقق من حالة الرحلة: لا يمكن إلغاء رحلة مكتملة أو ملغاة مسبقاً
         if (in_array($ride->status, ['completed', 'cancelled'])) {
             return response()->json(['message' => 'Cannot cancel a ride that is already ' . $ride->status], 400);
         }
 
-        // تحديث حالة الرحلة إلى ملغاة
         $ride->update(['status' => 'cancelled']);
 
-        // إذا كان هناك سائق مرتبط بالرحلة، نعيد حالته إلى "متوفر" (available)
         if ($ride->driver_id) {
             Driver::where('id', $ride->driver_id)->update(['status' => 'available']);
         }
 
-        // ملاحظة: هنا يتم إرسال إشعار لحظي (WebSockets/FCM) للطرف الآخر لإعلامه بالإلغاء
 
         return response()->json([
             'message' => 'Ride cancelled successfully.',
