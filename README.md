@@ -46,6 +46,6 @@ php artisan serve
 ```
 ---
 ##  API Documentation
-Comprehensive API documentation is available in the `docs/` directory, detailing all endpoints, request/response formats, and authentication requirements.
-[https://lakroune.io/](https://lakroune./taxi-go.git)
+The API documentation is available at:
+[https://api-app-86f38c.www.dockhosting.dev/](https://api-app-86f38c.www.dockhosting.dev/docs)
 ---
