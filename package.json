@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "laravel-echo": "^2.3.4",
+    "pusher-js": "^8.5.0"
+  },
+  "scripts": {
+    "build": "echo 'Skipping Vite build for API-only backend...'"
+  }
+}
